@@ -1,0 +1,27 @@
+##不上传的文件
+软件/
+jdk api 1.8.CHM
+pdf/
+*.pdf
+
+# IDE/编辑器个人配置
+.obsidian/
+.vscode/
+.idea/
+
+# AI 工具内部文件
+.codebuddy/
+.workbuddy/
+
+# 个人隐私内容（保留本地，不提交公开仓库）
+作业/
+毕设.md
+考试答疑.md
+面试职场.md
+云服务器.md
+ai/
+
+# 系统文件
+.DS_Store
+*.DS_Store
+Thumbs.db

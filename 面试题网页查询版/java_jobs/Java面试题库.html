@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Java面试题快速检索系统</title>
+  <link rel="stylesheet" href="css/github.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/marked.min.js"></script>
+  <script src="js/highlight.min.js"></script>
+  <script src="data/questions.js"></script>
+  <script src="data/answers.js"></script>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 class="title">Java面试宝典</h1>
+      <p class="subtitle">快速检索 · 精准匹配 · 助力面试</p>
+    </div>
+
+    <div class="search-container">
+      <input type="text" class="search-box" placeholder="输入关键词搜索Java面试题..." autocomplete="off">
+      <label class="upload-icon">
+        <span>📥</span>
+        <input type="file" onchange="upload(this)" accept="text/markdown">
+      </label>
+      <div class="search-icon">🔍</div>
+    </div>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="results-container">
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <div>搜索中...</div>
+      </div>
+
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">📚</div>
+        <div class="empty-text">开始搜索Java面试题</div>
+        <div class="empty-subtext">支持关键词检索，空格分隔多个关键词</div>
+      </div>
+
+      <div id="results"></div>
+    </div>
+  </div>
+
+  <!-- 弹窗 -->
+  <div id="modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalTitle"></h2>
+        <button class="modal-close" id="modalClose">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <div class="loading-spinner">
+          <div class="spinner"></div>
+          <div>加载中...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 搜索相关的DOM元素
+    const searchBox = document.querySelector('.search-box');
+    const resultsContainer = document.getElementById('results');
+    const statsElement = document.getElementById('stats');
+    const emptyState = document.getElementById('emptyState');
+    const loading = document.getElementById('loading');
+
+    // 问题数组
+    const storageQuestions = localStorage.getItem('java-questions');
+    let questions = storageQuestions ? JSON.parse(storageQuestions) : localQuestions;
+
+    // 答案数组
+    const storageAnswers = localStorage.getItem('java-answers');
+    let answers = storageAnswers ? JSON.parse(storageAnswers) : localAnswers;
+
+    // 上传markdown文件
+    function upload(input){
+      const file = input.files[0];
+      const reader = new FileReader();
+
+      reader.onload = function(){
+        const markdown = this.result;
+
+        let questionsId = 0;
+        const questionList = [];
+        const answerList = [];
+        const reg = /(?:^|\n)(###\s+[\s\S]*?)(?=\n###\s|$)/g;
+        let match = null;
+        while ((match = reg.exec(markdown)) !== null) {
+          questionsId++;
+          const result = match[1];
+          const match1 = result.match(/^\s*###\s+(.+)/);
+          const title = match1 && match1.length > 0 ?match1[1]: '';
+          const content = result.replace(/^\s*###\s+(.+)/, '');
+
+          questionList.push({
+            id: questionsId,
+            answerId: questionsId,
+            title
+          });
+
+          answerList.push({id: questionsId, content });   
+
+        }
+
+        questions = questionList;
+        answers = answerList;
+
+        localStorage.setItem('java-questions', JSON.stringify(questionList));
+        localStorage.setItem('java-answers', JSON.stringify(answerList));
+
+      }
+
+      reader.readAsText(file);
+
+
+    }
+
+    // 防抖函数
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
+
+    // 将文本分割为关键词数组
+    function splitKeywords(text) {
+      // 移除标点符号，转换为小写，按空格分割
+      return text.toLowerCase()
+        .replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(keyword => keyword.trim().length > 0);
+    }
+
+    // 高亮关键词
+    function highlightText(text, keywords) {
+      if (!keywords.length) return text;
+
+      let highlightedText = text;
+
+      // 按长度排序，优先匹配长的关键词
+      const sortedKeywords = keywords.sort((a, b) => b.length - a.length);
+
+      sortedKeywords.forEach(keyword => {
+        if (keyword.trim()) {
+          const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+          highlightedText = highlightedText.replace(regex, '<span class="highlight">$1</span>');
+        }
+      });
+
+      return highlightedText;
+    }
+
+    // 搜索函数
+    function search(query) {
+      const startTime = performance.now();
+
+      if (!query.trim()) {
+        showEmptyState();
+        return;
+      }
+
+      // 显示加载状态
+      showLoading();
+
+      // 使用 setTimeout 来模拟异步搜索，避免阻塞UI
+      setTimeout(() => {
+        const queryKeywords = splitKeywords(query);
+        const results = [];
+
+        questions.forEach((item, index) => {
+          const questionText = item.title.toLowerCase();
+          let matchScore = 0;
+          const matchedKeywords = [];
+
+          // 检查每个用户输入的关键词是否在题目中出现
+          queryKeywords.forEach(keyword => {
+            if (questionText.includes(keyword)) {
+              matchScore += keyword.length * 10; // 完全匹配给高分
+              matchedKeywords.push(keyword);
+            }
+          });
+
+          // 如果匹配到了关键词，加入结果
+          if (matchScore > 0) {
+            results.push({
+              question: item,
+              score: matchScore,
+              keywords: [...new Set(matchedKeywords)]
+            });
+          }
+        });
+
+        // 按匹配分数排序
+        results.sort((a, b) => b.score - a.score);
+
+        const endTime = performance.now();
+        const searchTime = (endTime - startTime).toFixed(2);
+
+        displayResults(results, searchTime);
+      }, 50);
+    }
+
+    // 显示搜索结果
+    function displayResults(results, searchTime) {
+      hideLoading();
+      hideEmptyState();
+
+      statsElement.textContent = `找到 ${results.length} 个结果，耗时 ${searchTime} 毫秒`;
+
+      if (results.length === 0) {
+        resultsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">🔍</div>
+                        <div class="empty-text">没有找到相关面试题</div>
+                        <div class="empty-subtext">请尝试其他关键词</div>
+                    </div>
+                `;
+        return;
+      }
+
+      const resultsHTML = results.map(result => {
+        return `
+                <div 
+                class="result-item fade-in" 
+                data-answer-id="${result.question.answerId}"
+                data-title="${result.question.title.replace(/"/g, '&quot;')}"
+                >
+                    <div class="result-content">
+                        ${highlightText(result.question.title, result.keywords)}
+                    </div>
+                </div>
+            `
+      }).join('');
+
+      resultsContainer.innerHTML = resultsHTML;
+    }
+
+    // 显示空状态
+    function showEmptyState() {
+      hideLoading();
+      emptyState.style.display = 'block';
+      resultsContainer.innerHTML = '';
+      statsElement.textContent = '';
+    }
+
+    // 隐藏空状态
+    function hideEmptyState() {
+      emptyState.style.display = 'none';
+    }
+
+    // 显示加载状态
+    function showLoading() {
+      hideEmptyState();
+      loading.style.display = 'block';
+      resultsContainer.innerHTML = '';
+    }
+
+    // 隐藏加载状态
+    function hideLoading() {
+      loading.style.display = 'none';
+    }
+
+    // 防抖搜索
+    const debouncedSearch = debounce(search, 300);
+
+    // 事件监听
+    searchBox.addEventListener('input', (e) => {
+      debouncedSearch(e.target.value);
+    });
+
+    // 初始化
+    showEmptyState();
+
+    // 搜索框聚焦效果
+    searchBox.addEventListener('focus', () => {
+      document.querySelector('.search-container').style.transform = 'scale(1.02)';
+    });
+
+    searchBox.addEventListener('blur', () => {
+      document.querySelector('.search-container').style.transform = 'scale(1)';
+    });
+
+    // 添加搜索框的样式过渡
+    document.querySelector('.search-container').style.transition = 'transform 0.2s ease';
+
+    // 弹窗相关功能
+    const modal = document.getElementById('modal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalBody = document.getElementById('modalBody');
+    const modalClose = document.getElementById('modalClose');
+
+    // 显示弹窗
+    function showModal(title, answerId) {
+
+      modal.style.display = 'block';
+      modalTitle.textContent = title;
+
+      // 显示加载状态
+      modalBody.innerHTML = `
+        <div class="loading-spinner">
+          <div class="spinner"></div>
+          <div>加载中...</div>
+        </div>
+      `;
+
+      // 模拟加载延迟，然后显示答案
+      setTimeout(() => {
+        const row = answers.find(item => item.id === answerId);
+        const answer = row && row.content ? row.content : '';
+        if (answer) {
+          // 使用marked.js解析markdown并显示
+          modalBody.innerHTML = marked.parse(answer);
+          // 高亮代码块
+          modalBody.querySelectorAll('pre code').forEach((block) => {
+            hljs.highlightElement(block);
+          });
+        } else {
+          modalBody.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #7f8c8d;">
+              <div style="font-size: 48px; margin-bottom: 16px;">📝</div>
+              <div style="font-size: 18px; margin-bottom: 8px;">答案正在整理中</div>
+              <div style="font-size: 14px;">该题目的详细解答即将上线，请关注更新</div>
+            </div>
+          `;
+        }
+      }, 200);
+    }
+
+    // 关闭弹窗
+    function closeModal() {
+      modal.style.display = 'none';
+    }
+
+    // 事件监听
+    modalClose.addEventListener('click', closeModal);
+
+    // 点击弹窗外部关闭
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        closeModal();
+      }
+    });
+
+    // ESC键关闭弹窗
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.style.display === 'block') {
+        closeModal();
+      }
+    });
+
+    // 为搜索结果添加点击事件监听器
+    document.addEventListener('click', (e) => {
+      const resultItem = e.target.closest('.result-item');
+      if (resultItem) {
+        const title = resultItem.getAttribute('data-title').replace(/&quot;/g, '"');
+        const answerId = Number(resultItem.getAttribute('data-answer-id'));
+        showModal(title, answerId);
+      }
+    });
+  </script>
+</body>
+
+</html>
