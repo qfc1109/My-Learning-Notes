@@ -795,7 +795,7 @@ sentinel是阿里巴巴开源的，面向分布式服务架构，高可用防护
 
 sentinel dashboard是sentinel可视化流量控制台组件，类似于nacos的管理界面，可以清晰地看到流量的使用情况，这样也更加方便进行流量控制，和熔断降级
 
-- 下载（群里发不了）
+- 下载
 
   > https://github.com/alibaba/Sentinel/releases/download/1.8.6/sentinel-dashboard-1.8.6.jar
 

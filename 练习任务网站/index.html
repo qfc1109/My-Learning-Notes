@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>练习任务网站</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script defer src="data/tasks.js"></script>
+  <script defer src="js/core.js"></script>
+  <script defer src="js/storage.js"></script>
+  <script defer src="js/app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <h1>练习任务网站</h1>
+        <p id="todayMeta">今日训练</p>
+      </div>
+      <div class="top-actions">
+        <span class="level-badge" id="levelBadge">L1</span>
+        <button class="primary" id="quickGenerateBtn" type="button">生成今日任务</button>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="主导航">
+      <button class="tab active" type="button" data-tab="today">今日任务</button>
+      <button class="tab" type="button" data-tab="library">题库管理</button>
+      <button class="tab" type="button" data-tab="records">学习记录</button>
+      <button class="tab" type="button" data-tab="stats">统计推荐</button>
+      <button class="tab" type="button" data-tab="transfer">导入导出</button>
+    </nav>
+
+    <p class="notice" id="notice" role="status"></p>
+
+    <main>
+      <section class="tab-panel active" id="tab-today">
+        <div class="layout two-columns">
+          <aside class="panel controls-panel">
+            <h2>筛选</h2>
+            <label>
+              难度
+              <select id="todayLevel">
+                <option value="">按推荐</option>
+                <option value="1">L1 基础语法</option>
+                <option value="2">L2 数组方法</option>
+                <option value="3">L3 面向对象集合</option>
+                <option value="4">L4 后端框架</option>
+                <option value="5">L5 综合项目</option>
+              </select>
+            </label>
+            <label>
+              知识点
+              <select id="todayKnowledge">
+                <option value="">不限</option>
+              </select>
+            </label>
+            <button class="primary full" id="generateTaskBtn" type="button">生成任务</button>
+          </aside>
+
+          <section class="panel task-panel">
+            <div class="panel-heading">
+              <h2>今日任务</h2>
+              <span id="recommendReason"></span>
+            </div>
+            <div id="todayTask" class="task-empty">暂无任务</div>
+          </section>
+        </div>
+
+        <section class="panel review-panel">
+          <div class="panel-heading">
+            <h2>保存复盘</h2>
+            <span id="recordMode">新记录</span>
+          </div>
+          <div class="form-grid">
+            <label>
+              代码路径
+              <input id="codePath" type="text" placeholder="E:\qfc\practice\Jun\src\...">
+            </label>
+            <label>
+              状态
+              <select id="recordStatus">
+                <option value="passed">通过</option>
+                <option value="failed">未通过</option>
+                <option value="pending">待审核</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            审核意见
+            <textarea id="reviewText" rows="4"></textarea>
+          </label>
+          <div class="form-grid">
+            <label>
+              错误点，每行一条
+              <textarea id="mistakesText" rows="5"></textarea>
+            </label>
+            <label>
+              复习建议，每行一条
+              <textarea id="reviewPointsText" rows="5"></textarea>
+            </label>
+          </div>
+          <div class="actions-row">
+            <button class="primary" id="saveRecordBtn" type="button">保存记录</button>
+            <button id="clearRecordFormBtn" type="button">清空</button>
+          </div>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="tab-library">
+        <div class="layout two-columns wide-left">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>题库</h2>
+              <span id="taskCount"></span>
+            </div>
+            <div class="filter-row">
+              <select id="libraryLevel">
+                <option value="">全部难度</option>
+                <option value="1">L1</option>
+                <option value="2">L2</option>
+                <option value="3">L3</option>
+                <option value="4">L4</option>
+                <option value="5">L5</option>
+              </select>
+              <select id="libraryKnowledge">
+                <option value="">全部知识点</option>
+              </select>
+              <input id="librarySearch" type="search" placeholder="搜索题目">
+            </div>
+            <div id="taskList" class="list"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>编辑题目</h2>
+              <span id="taskFormMode">新增</span>
+            </div>
+            <input id="taskId" type="hidden">
+            <label>
+              标题
+              <input id="taskTitle" type="text">
+            </label>
+            <div class="form-grid">
+              <label>
+                类型
+                <select id="taskType">
+                  <option value="coding">编码任务</option>
+                  <option value="review">复习题</option>
+                </select>
+              </label>
+              <label>
+                难度
+                <select id="taskLevel">
+                  <option value="1">L1</option>
+                  <option value="2">L2</option>
+                  <option value="3">L3</option>
+                  <option value="4">L4</option>
+                  <option value="5">L5</option>
+                </select>
+              </label>
+            </div>
+            <label>
+              知识点，逗号分隔
+              <input id="taskKnowledge" type="text">
+            </label>
+            <label>
+              笔记引用，逗号分隔
+              <input id="taskNotes" type="text">
+            </label>
+            <label>
+              题目
+              <textarea id="taskDescription" rows="4"></textarea>
+            </label>
+            <label>
+              要求，每行一条
+              <textarea id="taskRequirements" rows="4"></textarea>
+            </label>
+            <label>
+              复习问题，每行一条
+              <textarea id="taskReviewQuestions" rows="4"></textarea>
+            </label>
+            <label>
+              面试追问
+              <textarea id="taskInterview" rows="3"></textarea>
+            </label>
+            <label>
+              验收标准，每行一条
+              <textarea id="taskAcceptance" rows="4"></textarea>
+            </label>
+            <div class="actions-row">
+              <button class="primary" id="saveTaskBtn" type="button">保存题目</button>
+              <button id="resetTaskFormBtn" type="button">清空</button>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-records">
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>学习记录</h2>
+            <span id="recordCount"></span>
+          </div>
+          <div id="recordList" class="list"></div>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="tab-stats">
+        <div class="layout two-columns">
+          <section class="panel">
+            <h2>训练概览</h2>
+            <div class="metric-grid" id="metricGrid"></div>
+          </section>
+          <section class="panel">
+            <h2>下次建议</h2>
+            <div id="nextSuggestion" class="suggestion-box"></div>
+          </section>
+        </div>
+        <section class="panel">
+          <h2>知识点统计</h2>
+          <div id="knowledgeStats" class="knowledge-grid"></div>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="tab-transfer">
+        <div class="layout two-columns">
+          <section class="panel">
+            <h2>导入</h2>
+            <label>
+              题库 Markdown
+              <input id="importMarkdownInput" type="file" accept=".md,text/markdown">
+            </label>
+            <label>
+              完整备份 JSON
+              <input id="importJsonInput" type="file" accept=".json,application/json">
+            </label>
+          </section>
+          <section class="panel">
+            <h2>导出</h2>
+            <div class="button-grid">
+              <button id="exportAllJsonBtn" type="button">完整 JSON</button>
+              <button id="exportTasksJsonBtn" type="button">题库 JSON</button>
+              <button id="exportTasksMarkdownBtn" type="button">题库 Markdown</button>
+              <button id="exportRecordsJsonBtn" type="button">记录 JSON</button>
+              <button id="exportRecordsMarkdownBtn" type="button">记录 Markdown</button>
+            </div>
+            <button class="danger" id="clearLocalDataBtn" type="button">清空本地记录</button>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
