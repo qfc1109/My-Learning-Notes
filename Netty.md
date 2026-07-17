@@ -1111,13 +1111,13 @@ pom.xml
 
 
 
-#### Demo1
+### Demo1
 
 ```
 EchoServer，收到什么返回什么
 ```
 
-maven项目目录结构
+#### maven项目目录结构
 
 ```
 Netty
@@ -1421,7 +1421,7 @@ pom.xml                Maven 配置文件，引入 Netty 依赖。
 
 
 
-##### 完整流程
+#### 完整流程
 
 ```
 启动 EchoServer
@@ -1444,7 +1444,7 @@ pom.xml                Maven 配置文件，引入 Netty 依赖。
 
 
 
-#### Demo2
+### Demo2
 
 这一版对应的 Netty 概念是：
 
@@ -1455,7 +1455,7 @@ String  -> StringEncoder -> ByteBuf -> 网络发送
 
 注意：**这一版还没有解决 TCP 粘包 / 半包**。它只是让你看到：为什么第一版拿到 `ByteBuf`，加入解码器后就能拿到 `String`。
 
-**Maven 项目目录结构**
+#### **Maven 项目目录结构**
 
 ```
 Netty
@@ -1865,7 +1865,7 @@ Maven 配置文件，引入 Netty 依赖，并配置 UTF-8 源码编码，保证
 
 
 
-##### 执行链路
+#### 执行链路
 
 ```
 客户端 writeAndFlush("hello netty")
@@ -1891,7 +1891,7 @@ EchoServerHandler.channelRead 收到 String
 
 
 
-#### Demo3
+### Demo3
 
 ```
 出站：
@@ -1934,7 +1934,7 @@ hello netty
 hello netty 是真正的业务内容
 ```
 
-Maven 项目目录结构
+#### Maven 项目目录结构
 
 ```
 Netty
@@ -2295,7 +2295,7 @@ EchoClientHandler.java
   }
   ```
 
-##### 理解
+#### 理解
 
 ```
 1. TCP 是字节流，不是消息队列
@@ -2403,7 +2403,7 @@ MAX_FRAME_LENGTH = 1024 * 1024
 这个限制是为了防止超大包占用内存。
 ```
 
-##### 一句话总结
+#### 一句话总结
 
 ```
 StringDecoder / StringEncoder 解决的是：字节和字符串怎么互转。
@@ -2414,4 +2414,1048 @@ TCP 字节流里，怎么判断一条完整消息的边界。
 maxFrameLength 解决的是：
 不能让一条消息无限大，防止内存被超大包打爆。
 ```
+
+
+
+### Demo4
+
+```
+自定义 Message 对象 + 自定义 Encoder / Decoder
+```
+
+```
+入站：
+TCP 字节流
+-> LengthFieldBasedFrameDecoder
+-> MessageDecoder
+-> Message
+-> EchoServerHandler
+
+出站：
+EchoServerHandler 写 Message
+-> MessageEncoder
+-> LengthFieldPrepender
+-> TCP
+```
+
+先理解：
+
+```
+网络字节
+-> ByteBuf
+-> Message
+-> 业务 Handler
+```
+
+以及反过来：
+
+```
+业务 Handler 写 Message
+-> Message
+-> ByteBuf
+-> 网络字节
+```
+
+也就是说，长度字段这一层没有变。
+
+变化的是：
+
+```
+Demo3 的业务 Handler 处理 String
+Demo4 的业务 Handler 处理 Message
+```
+
+Demo3 里，`String` 本身就是业务数据。
+
+Demo4 里，`Message` 才是业务数据对象，`content` 只是这个对象里的一个字段。
+
+可以这样理解：
+
+```
+String 是最简单的正文
+Message 是把正文包成了一个业务对象
+```
+
+以后如果继续扩展协议，`Message` 里就可以慢慢加：
+
+```
+protoId
+sequenceId
+body
+timestamp
+playerId
+```
+
+#### 数据格式
+
+这一版真正发到网络里的数据仍然是：
+
+```
+[4字节长度][正文]
+```
+
+#### Maven 项目目录结构
+
+```
+Netty
+├── src
+│   ├── main
+│   │   └── java
+│   │       └── v4
+│   │           ├── Message.java
+│   │           ├── MessageEncoder.java
+│   │           ├── MessageDecoder.java
+│   │           ├── EchoServer.java
+│   │           ├── EchoServerHandler.java
+│   │           ├── EchoClient.java
+│   │           └── EchoClientHandler.java
+│   └── test
+│       └── java
+│           └── v4
+│               └── MessageCodecTest.java
+└── pom.xml
+```
+
+#### Pipeline 顺序
+
+服务端和客户端使用同一套协议，所以 Pipeline 顺序基本一样：
+
+```
+LengthFieldBasedFrameDecoder
+MessageDecoder
+LengthFieldPrepender
+MessageEncoder
+EchoServerHandler / EchoClientHandler
+```
+
+入站方向：
+
+```
+网络字节
+    ↓
+LengthFieldBasedFrameDecoder
+    ↓
+去掉 4 字节长度，得到完整正文 ByteBuf
+    ↓
+MessageDecoder
+    ↓
+Message
+    ↓
+业务 Handler
+```
+
+出站方向：
+
+```
+业务 Handler 写出 Message
+    ↓
+MessageEncoder
+    ↓
+正文 ByteBuf
+    ↓
+LengthFieldPrepender
+    ↓
+4 字节长度 + 正文
+    ↓
+网络发送
+```
+
+注意一个容易绕的点：
+
+```
+代码添加顺序：
+LengthFieldPrepender
+MessageEncoder
+
+真实出站执行顺序：
+MessageEncoder
+LengthFieldPrepender
+```
+
+原因还是和 Demo3 一样：
+
+```
+入站从前往后走
+出站通常从后往前走
+```
+
+所以业务 Handler 写出 `Message` 时，会先碰到 `MessageEncoder`。
+
+`MessageEncoder` 把 `Message` 转成 `ByteBuf` 后，再交给 `LengthFieldPrepender` 加长度字段。
+
+#### Message.java
+
+```java
+package v4;
+
+public class Message {
+    private final String content;
+
+    public Message(String content) {
+        this.content = content;
+    }
+
+    public String getContent() {
+        return content;
+    }
+}
+```
+
+这个类现在非常简单，只有一个 `content`。
+
+为什么要单独定义一个 Message 类？
+
+因为真实业务代码里，我们通常不希望 Handler 直接处理裸字符串或者裸 ByteBuf。
+
+比如游戏服务端以后可能会有：
+
+```
+登录消息
+移动消息
+攻击消息
+聊天消息
+背包操作消息
+```
+
+这些消息最终都应该抽象成业务对象，而不是让每个业务 Handler 自己从 ByteBuf 里读字节。
+
+这一版的 `Message` 可以理解为未来协议对象的雏形。
+
+#### MessageEncoder.java
+
+```java
+package v4;
+
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.MessageToByteEncoder;
+import io.netty.util.CharsetUtil;
+
+public class MessageEncoder extends MessageToByteEncoder<Message> {
+    @Override
+    protected void encode(ChannelHandlerContext ctx, Message message, ByteBuf out) throws Exception {
+        /*
+         * Encoder 只负责把业务对象变成正文 ByteBuf。
+         *
+         * 这里暂时只编码 content，因为这一版 Demo 的目标是看清：
+         * 业务对象 Message -> 网络字节，这一步应该放在编码器里完成。
+         *
+         * 前面的 4 字节长度仍然交给 LengthFieldPrepender，
+         * 这样“消息正文怎么编码”和“消息边界怎么标记”是两件清楚的事情。
+         */
+        out.writeCharSequence(message.getContent(), CharsetUtil.UTF_8);
+    }
+}
+```
+
+`MessageEncoder` 继承的是：
+
+```
+MessageToByteEncoder<Message>
+```
+
+意思是：
+
+```
+我只处理 Message 类型的出站对象
+我要把 Message 编码成 ByteBuf
+```
+
+这一版编码规则很简单：
+
+```
+Message.content
+-> UTF-8 字节
+-> 写入 ByteBuf
+```
+
+它不加长度字段。
+
+原因是职责要分开：
+
+```
+MessageEncoder          负责正文怎么编码
+LengthFieldPrepender    负责正文前面怎么补长度
+```
+
+这样代码更清楚：
+
+```
+对象转字节是一件事
+消息边界是一件事
+```
+
+#### MessageDecoder.java
+
+```java
+package v4;
+
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.ByteToMessageDecoder;
+import io.netty.util.CharsetUtil;
+
+import java.util.List;
+
+public class MessageDecoder extends ByteToMessageDecoder {
+    @Override
+    protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+        if (!in.isReadable()) {
+            return;
+        }
+
+        /*
+         * Decoder 这里不用再判断“这一条消息收完整了吗”。
+         *
+         * 因为它前面已经有 LengthFieldBasedFrameDecoder：
+         * 只有凑齐一整条消息正文后，ByteBuf 才会继续传到这里。
+         *
+         * 所以 MessageDecoder 的职责很单纯：
+         * 把一条完整消息的正文 ByteBuf 转成业务对象 Message。
+         */
+        String content = in.readCharSequence(in.readableBytes(), CharsetUtil.UTF_8).toString();
+        out.add(new Message(content));
+    }
+}
+```
+
+`MessageDecoder` 继承的是：
+
+```
+ByteToMessageDecoder
+```
+
+意思是：
+
+```
+我处理入站 ByteBuf
+我要把 ByteBuf 解码成后面的业务对象
+```
+
+#### EchoServer.java
+
+```java
+package v4;
+
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelPipeline;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.codec.LengthFieldPrepender;
+
+public class EchoServer {
+    private static final int PORT = 9000;
+    private static final int MAX_FRAME_LENGTH = 1024 * 1024;
+
+    public static void main(String[] args) throws InterruptedException {
+        /*
+         * 第三版 Demo 仍然保留 9000 端口和 v3 的线程模型。
+         * 本版只新增一个核心点：业务 Handler 收到的不再是 String，而是 Message 对象。
+         */
+        EventLoopGroup bossGroup = new NioEventLoopGroup();
+        EventLoopGroup workerGroup = new NioEventLoopGroup();
+        try {
+            ServerBootstrap bootstrap = new ServerBootstrap();
+            bootstrap.group(bossGroup, workerGroup)
+                    .channel(NioServerSocketChannel.class)
+                    .childHandler(new ChannelInitializer<SocketChannel>() {
+                        @Override
+                        protected void initChannel(SocketChannel socketChannel) throws Exception {
+                            configurePipeline(socketChannel.pipeline());
+                        }
+                    });
+
+            ChannelFuture future = bootstrap.bind(PORT).sync();
+            System.out.println("Server started on port " + PORT);
+
+            future.channel().closeFuture().sync();
+        } finally {
+            bossGroup.shutdownGracefully();
+            workerGroup.shutdownGracefully();
+        }
+    }
+
+    static void configurePipeline(ChannelPipeline pipeline) {
+        /*
+         * 入站第一步仍然先解决消息边界。
+         *
+         * MessageDecoder 只能处理“一条完整消息的正文”，
+         * 如果把它放在 LengthFieldBasedFrameDecoder 前面，它看到的仍然可能是半包或粘包。
+         */
+        pipeline.addLast(new LengthFieldBasedFrameDecoder(
+                MAX_FRAME_LENGTH,
+                0,
+                4,
+                0,
+                4
+        ));
+
+        /*
+         * v3 这里是 StringDecoder，所以业务 Handler 收到 String。
+         * v4 换成 MessageDecoder，所以业务 Handler 收到 Message。
+         */
+        pipeline.addLast(new MessageDecoder());
+
+        /*
+         * 出站方向会反着走：
+         *
+         * EchoServerHandler 写出 Message
+         * -> MessageEncoder 把 Message 变成正文 ByteBuf
+         * -> LengthFieldPrepender 在正文前补 4 字节长度
+         * -> 发送到网络
+         */
+        pipeline.addLast(new LengthFieldPrepender(4));
+        pipeline.addLast(new MessageEncoder());
+
+        /*
+         * 到这里时，业务代码只面对 Message 对象。
+         * ByteBuf 的读取、编码细节留给前面的编解码器处理。
+         */
+        pipeline.addLast(new EchoServerHandler());
+    }
+}
+```
+
+服务端 Pipeline 的核心：
+
+```
+pipeline.addLast(new LengthFieldBasedFrameDecoder(...));
+pipeline.addLast(new MessageDecoder());
+pipeline.addLast(new LengthFieldPrepender(4));
+pipeline.addLast(new MessageEncoder());
+pipeline.addLast(new EchoServerHandler());
+```
+
+入站时：
+
+```
+LengthFieldBasedFrameDecoder
+-> MessageDecoder
+-> EchoServerHandler
+```
+
+出站时：
+
+```
+EchoServerHandler
+-> MessageEncoder
+-> LengthFieldPrepender
+```
+
+#### EchoServerHandler.java
+
+```java
+package v4;
+
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+
+public class EchoServerHandler extends ChannelInboundHandlerAdapter {
+    @Override
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        System.out.println("Server ChannelActive: " + ctx.channel().remoteAddress());
+    }
+
+    @Override
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        System.out.println("server channelInactive: " + ctx.channel().remoteAddress());
+    }
+
+    @Override
+    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        /*
+         * v3 这里强转成 String，是因为前面用了 StringDecoder。
+         * v4 这里强转成 Message，是因为前面换成了 MessageDecoder。
+         *
+         * 这就是 Pipeline 的价值：
+         * 业务 Handler 不需要直接读 ByteBuf，也不需要关心 UTF-8 编码细节。
+         */
+        Message message = (Message) msg;
+        System.out.println("server received: " + message.getContent());
+
+        /*
+         * 服务端回显的仍然是业务对象 Message。
+         * 出站时 MessageEncoder 和 LengthFieldPrepender 会把它变成网络字节。
+         */
+        ctx.channel().writeAndFlush(message);
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        cause.printStackTrace();
+        ctx.close();
+    }
+}
+```
+
+这里和 Demo3 的区别最明显。
+
+Demo3：
+
+```java
+String text = (String) msg;
+ctx.channel().writeAndFlush(text);
+```
+
+Demo4：
+
+```java
+Message message = (Message) msg;
+ctx.channel().writeAndFlush(message);
+```
+
+业务 Handler 不再关心：
+
+```
+ByteBuf 怎么读
+UTF-8 怎么转
+长度字段怎么处理
+```
+
+它只关心：
+
+```
+我收到了一条 Message
+我要处理它的 content
+我要把 Message 写回去
+```
+
+#### EchoClient.java
+
+```java
+package v4;
+
+import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelPipeline;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.codec.LengthFieldPrepender;
+
+public class EchoClient {
+    private static final int PORT = 9000;
+    private static final int MAX_FRAME_LENGTH = 1024 * 1024;
+
+    public static void main(String[] args) throws InterruptedException {
+        /*
+         * 客户端和服务端必须使用同一套协议：
+         * 4 字节长度字段 + Message 的 content 正文。
+         */
+        EventLoopGroup group = new NioEventLoopGroup();
+        try {
+            Bootstrap bootstrap = new Bootstrap();
+
+            bootstrap.group(group)
+                    .channel(NioSocketChannel.class)
+                    .handler(new ChannelInitializer<SocketChannel>() {
+                        @Override
+                        protected void initChannel(SocketChannel socketChannel) throws Exception {
+                            configurePipeline(socketChannel.pipeline());
+                        }
+                    });
+
+            Channel channel = bootstrap.connect("127.0.0.1", PORT).sync().channel();
+
+            /*
+             * 业务代码现在表达的是“我要发送一条 Message”。
+             * 至于 Message 怎样变成 ByteBuf、前面怎样补长度字段，仍然交给 Pipeline。
+             */
+            channel.writeAndFlush(new Message("hello netty")).sync();
+
+            channel.closeFuture().sync();
+        } finally {
+            group.shutdownGracefully();
+        }
+    }
+
+    static void configurePipeline(ChannelPipeline pipeline) {
+        /*
+         * 收包路径：
+         * 网络字节 -> 按长度字段拆出完整正文 -> 正文解码成 Message。
+         */
+        pipeline.addLast(new LengthFieldBasedFrameDecoder(
+                MAX_FRAME_LENGTH,
+                0,
+                4,
+                0,
+                4
+        ));
+        pipeline.addLast(new MessageDecoder());
+
+        /*
+         * 发包路径实际执行顺序：
+         * MessageEncoder -> LengthFieldPrepender。
+         */
+        pipeline.addLast(new LengthFieldPrepender(4));
+        pipeline.addLast(new MessageEncoder());
+
+        pipeline.addLast(new EchoClientHandler());
+    }
+}
+```
+
+客户端发送时不再写：
+
+```java
+channel.writeAndFlush("hello netty").sync();
+```
+
+而是写：
+
+```java
+channel.writeAndFlush(new Message("hello netty")).sync();
+```
+
+这就是业务层变化：
+
+```
+我不是发送一个字符串
+我是发送一条业务消息
+```
+
+但是网络层最终还是会被编码成：
+
+```
+4 字节长度 + UTF-8 正文
+```
+
+#### EchoClientHandler.java
+
+```java
+package v4;
+
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+
+public class EchoClientHandler extends ChannelInboundHandlerAdapter {
+    @Override
+    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        /*
+         * 客户端业务 Handler 也只处理 Message。
+         * 能走到这里，说明回包已经先完成了长度拆包和 Message 解码。
+         */
+        Message message = (Message) msg;
+        System.out.println("client received: " + message.getContent());
+
+        ctx.close();
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        cause.printStackTrace();
+        ctx.close();
+    }
+}
+```
+
+客户端收到服务端回包时，真实网络数据仍然是：
+
+```
+4 字节长度 + 正文
+```
+
+但是到 `EchoClientHandler` 时，已经变成：
+
+```
+Message
+```
+
+所以客户端业务代码也不用直接处理 ByteBuf。
+
+#### MessageCodecTest.java
+
+```java
+package v4;
+
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.embedded.EmbeddedChannel;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.codec.LengthFieldPrepender;
+import io.netty.util.CharsetUtil;
+import junit.framework.TestCase;
+
+public class MessageCodecTest extends TestCase {
+    private static final int MAX_FRAME_LENGTH = 1024 * 1024;
+
+    public void testDecoderTurnsCompleteFrameIntoMessage() {
+        EmbeddedChannel channel = new EmbeddedChannel(
+                new LengthFieldBasedFrameDecoder(
+                        MAX_FRAME_LENGTH,
+                        0,
+                        4,
+                        0,
+                        4
+                ),
+                new MessageDecoder()
+        );
+
+        byte[] body = "hello message".getBytes(CharsetUtil.UTF_8);
+        ByteBuf packet = Unpooled.buffer();
+        packet.writeInt(body.length);
+        packet.writeBytes(body);
+
+        assertTrue(channel.writeInbound(packet));
+
+        Message message = channel.readInbound();
+        assertEquals("hello message", message.getContent());
+
+        assertFalse(channel.finish());
+    }
+
+    public void testEncoderWritesMessageBodyAndLengthField() {
+        EmbeddedChannel channel = new EmbeddedChannel(
+                new LengthFieldPrepender(4),
+                new MessageEncoder()
+        );
+
+        assertTrue(channel.writeOutbound(new Message("hello message")));
+
+        ByteBuf packet = Unpooled.buffer();
+        ByteBuf packetPart;
+        while ((packetPart = channel.readOutbound()) != null) {
+            packet.writeBytes(packetPart);
+            packetPart.release();
+        }
+
+        assertEquals("hello message".getBytes(CharsetUtil.UTF_8).length, packet.readInt());
+        assertEquals("hello message", packet.toString(CharsetUtil.UTF_8));
+
+        packet.release();
+        assertFalse(channel.finish());
+    }
+}
+```
+
+这个测试主要验证两件事。
+
+第一件：
+
+```
+4 字节长度 + 正文
+-> LengthFieldBasedFrameDecoder
+-> MessageDecoder
+-> Message("hello message")
+```
+
+第二件：
+
+```
+Message("hello message")
+-> MessageEncoder
+-> LengthFieldPrepender
+-> 4 字节长度 + 正文
+```
+
+这里使用 `EmbeddedChannel`，是因为它可以在不真正启动 TCP 服务端和客户端的情况下，测试 Pipeline 里的 Handler 行为。
+
+#### 执行链路
+
+客户端发请求：
+
+```
+EchoClient
+channel.writeAndFlush(new Message("hello netty"))
+    ↓
+MessageEncoder
+把 Message.content 写成 UTF-8 ByteBuf
+    ↓
+LengthFieldPrepender
+在正文前补 4 字节长度
+    ↓
+网络发送
+```
+
+服务端收请求：
+
+```
+网络字节到达服务端
+    ↓
+LengthFieldBasedFrameDecoder
+根据 4 字节长度字段等待完整正文
+    ↓
+MessageDecoder
+把完整正文 ByteBuf 转成 Message
+    ↓
+EchoServerHandler
+收到 Message，打印 message.getContent()
+    ↓
+ctx.channel().writeAndFlush(message)
+```
+
+服务端回包：
+
+```
+EchoServerHandler 写出 Message
+    ↓
+MessageEncoder
+    ↓
+LengthFieldPrepender
+    ↓
+客户端收到 4 字节长度 + 正文
+```
+
+客户端收回包：
+
+```
+LengthFieldBasedFrameDecoder
+    ↓
+MessageDecoder
+    ↓
+EchoClientHandler 收到 Message
+    ↓
+打印 client received: hello netty
+    ↓
+关闭连接
+```
+
+#### 理解
+
+```
+1. 为什么前一版 Handler 收到的是 String，这一版收到的是 Message
+
+因为 Pipeline 里放的 Decoder 不一样。
+
+Demo3：
+LengthFieldBasedFrameDecoder -> StringDecoder -> Handler
+
+所以 Handler 收到 String。
+
+Demo4：
+LengthFieldBasedFrameDecoder -> MessageDecoder -> Handler
+
+所以 Handler 收到 Message。
+
+Handler 收到什么类型，不是 TCP 决定的，而是前面的 Decoder 决定的。
+```
+
+```
+2. 为什么 MessageDecoder 要放在 LengthFieldBasedFrameDecoder 后面
+
+MessageDecoder 只知道怎么把“一条完整正文”转成 Message。
+
+但 TCP 是字节流，可能半包，也可能粘包。
+
+所以必须先通过 LengthFieldBasedFrameDecoder 判断：
+
+这一条消息完整了吗？
+
+完整之后，才能交给 MessageDecoder。
+
+正确顺序：
+
+TCP 字节流
+-> LengthFieldBasedFrameDecoder 拆出完整正文
+-> MessageDecoder 转 Message
+```
+
+```
+3. 为什么 MessageEncoder 要和 LengthFieldPrepender 配合
+
+MessageEncoder 只负责：
+
+Message -> 正文 ByteBuf
+
+LengthFieldPrepender 负责：
+
+正文 ByteBuf -> 4 字节长度 + 正文
+
+如果只有 MessageEncoder，没有 LengthFieldPrepender，
+接收方就不知道一条消息到哪里结束。
+
+如果只有 LengthFieldPrepender，没有 MessageEncoder，
+Netty 也不知道 Message 这个 Java 对象怎么变成 ByteBuf。
+
+所以它们是配合关系：
+
+MessageEncoder 解决对象怎么编码
+LengthFieldPrepender 解决消息边界怎么标记
+```
+
+```
+4. 为什么业务代码不应该直接操作 ByteBuf
+
+ByteBuf 是网络层和编解码层更关心的东西。
+
+它涉及：
+
+读指针
+写指针
+引用计数
+内存释放
+字节序
+编码格式
+
+如果每个业务 Handler 都直接读 ByteBuf，代码会很容易混乱。
+
+比如游戏业务 Handler 里应该关心：
+
+玩家要登录
+玩家要移动
+玩家要攻击
+玩家发送聊天
+
+而不是关心：
+
+先 readInt 还是 readBytes
+UTF-8 怎么解码
+ByteBuf 要不要 release
+半包时要不要等待
+
+所以更好的分层是：
+
+编解码器处理 ByteBuf
+业务 Handler 处理 Message
+```
+
+```
+5. Message 对象和真实项目协议对象的关系
+
+这一版的 Message 很简单：
+
+Message {
+    content: String
+}
+
+真实项目里通常会更复杂，比如：
+
+Message {
+    protoId: int
+    body: byte[]
+}
+
+或者：
+
+Message {
+    cmd: int
+    sequence: long
+    data: Protobuf对象
+}
+
+但学习时不能一口吃太多。
+
+这版先理解：
+
+ByteBuf 和 Message 的转换放在 Encoder / Decoder
+业务 Handler 不直接操作 ByteBuf
+
+下一步再理解 protoId 和业务分发会轻松很多。
+```
+
+```
+6. 这一版为什么暂时不加 protoId
+
+因为 protoId 一加进来，就会引出：
+
+协议号怎么定义
+不同协议怎么分发
+不同 body 怎么解析
+Handler 怎么注册
+Protobuf 怎么接入
+
+这些都是后面的重点，但不是这一版的重点。
+
+这一版只解决一个问题：
+
+如何让业务 Handler 从处理 String，升级为处理自定义 Message 对象。
+```
+
+#### 常见错误
+
+```
+1. 把 MessageDecoder 放在 LengthFieldBasedFrameDecoder 前面
+
+错误原因：
+MessageDecoder 会直接面对 TCP 字节流，可能读到半条消息。
+
+正确做法：
+先拆包，再解码成 Message。
+```
+
+```
+2. 在业务 Handler 里强转成 String
+
+Demo4 里前面已经不是 StringDecoder，而是 MessageDecoder。
+
+所以这里应该是：
+
+Message message = (Message) msg;
+
+而不是：
+
+String text = (String) msg;
+```
+
+```
+3. 出站只写 content，不写 Message
+
+如果业务 Handler 写：
+
+ctx.writeAndFlush(message.getContent());
+
+那就又退回 Demo3 的写法了。
+
+Demo4 要练的是：
+
+业务 Handler 写出 Message
+由 MessageEncoder 负责把 Message 编成字节
+```
+
+```
+4. 以为 MessageEncoder 会自动加长度字段
+
+MessageEncoder 不负责长度字段。
+
+它只负责编码正文。
+
+长度字段仍然由 LengthFieldPrepender 负责。
+```
+
+#### 测试命令
+
+只跑 Demo4 测试：
+
+```bash
+mvn "-Dtest=v4.MessageCodecTest" test
+```
+
+跑全部测试：
+
+```bash
+mvn test
+```
+
+当前验证结果：
+
+```
+Tests run: 3, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+#### 一句话总结
+
+```
+Demo3 解决的是：
+TCP 字节流里怎么拆出一条完整字符串消息。
+
+Demo4 解决的是：
+拆出完整消息后，怎么把正文转成自定义 Message 对象，让业务 Handler 不再直接处理 String 或 ByteBuf。
+
+LengthFieldBasedFrameDecoder / LengthFieldPrepender 负责消息边界。
+
+MessageDecoder / MessageEncoder 负责 Message 和 ByteBuf 的转换。
+
+EchoServerHandler / EchoClientHandler 只负责业务逻辑。
+```
+
+
 
