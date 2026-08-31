@@ -1,4 +1,4 @@
-## 版本控制
+# 版本控制
 
 ### 1.什么是版本控制
 
@@ -23,7 +23,7 @@
 
     <img src="typora_images/0fdd9409661e2ef163e3ab7bd041bbed.png" alt="img" style="zoom: 67%;" />
 
-### 3.git
+## 3.git
 
 #### 3.1 git工作流程
 
@@ -272,4 +272,44 @@ git pull --rebase origin master
   ==合并分支之前，要切换到主分支==
 
 - ==注：每次合并后，最好先提交推送一下，保存一下版本，一定不要多个分支一起合并到主分支在提交推送==
+
+
+
+
+
+## svn
+
+#### 批量提交
+
+创建一个文件，将你想要在**本次**提交的文件路径写入这个文件，每行一个。
+
+```
+svn commit --targets commit_list.txt -m "提交信息"
+```
+
+#### 批量删除
+
+创建一个文件，参考批量提交
+
+```
+svn delete --targets delete_list.txt
+```
+
+> 只有通过SVN命令（如`svn delete`）标记删除并提交后，该文件才会在新版本中消失。
+>
+> 但该文件及其所有历史版本**仍然保留在SVN仓库中**
+
+**提交变更**：运行 `svn commit` 提交这次删除操作。
+
+```
+svn commit -m "删除过时的配置文件"
+```
+
+
+
+#### 误提交
+
+ `TortoiseSVN → Show log`，选中误提交文件，右键选择 `Revert changes from this revision`，然后**再提交一次**，覆盖上一次误提交：
+
+![image-20260825121520406](typora_images/image-20260825121520406.png)
 
