@@ -20,7 +20,7 @@ servlet jsp--javaEE---企业级开发，把信息与动态网页关联起来（�
 
 为了提升效率：
 
-框架开发：spring sprinmvc  mybatis ssm mybatisplus
+框架开发：spring springmvc  mybatis ssm mybatisplus
 
 ==用户角度==使用效率高，高并发
 

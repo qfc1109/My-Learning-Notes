@@ -195,7 +195,7 @@ linux是一种类似于Unix系统，是借鉴于Unix思想研发出来的，兼�
 - mkdir：创建目录，如果父级目录不存在，创建失败
   - mkdir -p：可以实现逐级创建
   
-- vi：可以查看和创建文件，可以编辑，如果查看文件不存在，则创建文件
+- `vi`：可以查看和创建文件，可以编辑，如果查看文件不存在，则创建文件
 
   - 按`i`（插入模式）：编辑文件
   - 按`Esc`（命令模式/普通模式）：
@@ -210,7 +210,7 @@ linux是一种类似于Unix系统，是借鉴于Unix思想研发出来的，兼�
   >
   > - rm -rfv：递归删除，
   >
-  >   `r`表示递归（会删除文件夹以及里面的所有文件），f强制，`v`展示 ，`i`需要确认
+  >   `r`表示递归（会删除文件夹以及里面的所有文件），`f`强制，`v`展示 ，`i`需要确认
 
 - cp [文件名] [复制到的位置]：复制文件
   - cp -r：递归复制目录
@@ -277,9 +277,22 @@ linux是一种类似于Unix系统，是借鉴于Unix思想研发出来的，兼�
 
 #### 6.2 查看、查找命令
 
-- vi 文件：就包含了查看文件的功能
+- `vi`：可以查看和创建文件，可以编辑，如果查看文件不存在，则创建文件
+
+  - 按`i`（插入模式）：编辑文件
+  - 按`Esc`（命令模式/普通模式）：
+    - 移动光标（`h/j/k/l`）、删除字符/行（`x`/`dd`）、复制行（`yy`）、粘贴（`p`）、撤销（`u`）。
+    - `:q` 退出 ，`:q!`强制退出
+    - `:w`保存， `:wq`、`:x`保存并退出
+    - 全局搜索（`/关键词`）和替换（`%s/旧/新/g`）。
 
 - cat 文件：查看文件的全部内容
+
+  - cat 也可以结合grep搜索
+
+  ```bash
+  cat 指定文件 | grep '内容'
+  ```
 
 - `tail` -数字 文件：动态显示文件的后几行内容，一般用于查看服务器日志
 
@@ -292,8 +305,9 @@ linux是一种类似于Unix系统，是借鉴于Unix思想研发出来的，兼�
 
 - `grep`：查看文件中的指定内容
 
-  - `-n`：显示行号
-  - `-E`：启用正则表达式
+  - `n`：显示行号
+  - `E`：启用正则表达式
+  - `i`：忽略大小写
 
   查找所有包含 `ERROR`、`Exception` 或 `failed` 的行
 
@@ -301,23 +315,25 @@ linux是一种类似于Unix系统，是借鉴于Unix思想研发出来的，兼�
   grep -nE 'ERROR|Exception|failed' app.log
   ```
 
-  在 /var/log 下递归查找包含 "ERROR" 的所有文件，只列出文件名
+  在 /var/log 下递归查找包含 "ERROR" 的所有`文件`，只列出文件名
 
   ```
   grep -rl "ERROR" /var/log/
   ```
 
-- find：查找文件
+  同时`搜索多个`
+
+  ```
+  grep -E "8500000008|error" logs/info.log
+  ```
+
+  
+
+- find：`查找文件`
 
   ```
   # 在 /var 目录下，查找文件名包含 "access" 且忽略大小写的文件
   find /var -iname "*access*"
-  ```
-
-- cat 也可以结合grep搜索
-
-  ```bash
-  cat 指定文件 | grep '内容'
   ```
 
 
@@ -568,7 +584,7 @@ chmod 755 文件或者目录
 
   - 如果不需要前缀，修改war包的名称，变成ROOT.war
 
-    <img src="typora_images/linux_12.png" alt="image-20260305151724194" style="zoom: 25%;" />
+    <img src="typora_images/linux_12.png" alt="image-20260305151724194"  />
 
   4.修改端口号tomcat目录——>conf——>server.xml
 
@@ -784,21 +800,24 @@ mysqldump -u账号 -p密码 --default-character-set=utf8 -B 数据库名(也可�
 #语法： -B 后面添加数据库名， --all-databases:表示所有数据库
 #案例：
 #解析：my.$(date +%F).sql生成 my.2026-xx.sql
-mysqldump -uroot -proot --default-character-set=utf8 -B sc251001 > /usr/local/sql/my.$(date +%F).sql
+mysqldump -uroot -proot --default-character-set=utf8mb4 -B sc251001 > /usr/local/sql/my.$(date +%F_%H%M%S).sql
 ```
 
 输出如下：
 
 ```bash
-[root@localhost sql]# mysqldump -uroot -proot --default-character-set=utf8 -B sc251001 > /usr/local/sql/my.$(date +%F).sql
+[root@localhost sql]# mysqldump -uroot -proot --default-character-set=utf8mb4 -B sc251001 > /usr/local/sql/my.$(date +%F_%H%M%S).sql
 mysqldump: [Warning] Using a password on the command line interface can be insecure.
 [root@localhost sql]# ls
 my.2026-03-06.sql
-[root@localhost sql]# 
 ```
 
 - 还原数据库
 
+  ```sql
+  mysql -uroot -p --default-character-set=utf8 < /usr/local/sql/my.2026-03-06.sql
+  ```
+  
   
 
 #### 9.2 自动定期备份
@@ -877,6 +896,3 @@ source /usr/local/sql/my.2026-03-06.sql
    ```
 
    
-
-
-
